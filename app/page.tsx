@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const rows = [
   ["Mon · Aug 3", "7:56 AM", "5:08 PM", "8h 12m", "On time"],
@@ -17,6 +17,16 @@ export default function Home() {
   const [toast, setToast] = useState("");
   const [leave, setLeave] = useState(false);
   const [sent, setSent] = useState(false);
+  const [databaseStatus, setDatabaseStatus] = useState<"checking" | "connected" | "error">("checking");
+
+  useEffect(() => {
+    fetch("/api/health/supabase", { cache: "no-store" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Supabase health check failed");
+        setDatabaseStatus("connected");
+      })
+      .catch(() => setDatabaseStatus("error"));
+  }, []);
 
   const toggleClock = () => {
     const next = !clockedIn;
@@ -33,7 +43,7 @@ export default function Home() {
       <div className="aside-foot"><button>⚙ &nbsp; Settings</button><div className="person"><i>MC</i><span><strong>Mara Cruz</strong><small>Employee · ENG-0142</small></span></div></div>
     </aside>
     <main>
-      <header><button className="search">⌕ &nbsp; Search people, reports... <kbd>⌘ K</kbd></button><div><button>♢</button><button>?</button></div></header>
+      <header><button className="search">⌕ &nbsp; Search people, reports... <kbd>⌘ K</kbd></button><div><span className={`database-status ${databaseStatus}`}><i />{databaseStatus === "checking" ? "Connecting" : databaseStatus === "connected" ? "Database connected" : "Database unavailable"}</span><button>♢</button><button>?</button></div></header>
       <div className="content">
         {tab !== "Overview" ? <section className="empty card"><small>MODULE</small><h1>{tab}</h1><p>This module is part of the MVP. The first working slice focuses on attendance, leave, and payroll visibility.</p><button className="primary" onClick={() => setTab("Overview")}>Back to overview</button></section> : <>
           <section className="welcome"><div><small>THURSDAY, AUGUST 6</small><h1>Good morning, Mara.</h1><p>Here’s your workday at a glance.</p></div><button className="outline" onClick={() => setLeave(true)}>＋ Request leave</button></section>
