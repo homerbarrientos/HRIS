@@ -1,6 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "@/lib/supabase";
 
 const rows = [
   ["Mon · Aug 3", "7:56 AM", "5:08 PM", "8h 12m", "On time"],
@@ -12,8 +15,11 @@ const rows = [
 const nav = ["Overview", "Time & attendance", "Leave", "Payroll", "People", "Reports"];
 
 export default function Home() {
+  const router = useRouter();
+  const supabaseRef = useRef<SupabaseClient | null>(null);
   const [tab, setTab] = useState("Overview");
-  const [clockedIn, setClockedIn] = useState(true);
+  const [clockedIn, setClockedIn] = useState(false);
+  const [profile, setProfile] = useState<{ id: string; organization_id: string; full_name: string; employee_number: string } | null>(null);
   const [toast, setToast] = useState("");
   const [leave, setLeave] = useState(false);
   const [sent, setSent] = useState(false);
@@ -26,12 +32,55 @@ export default function Home() {
         setDatabaseStatus("connected");
       })
       .catch(() => setDatabaseStatus("error"));
-  }, []);
 
-  const toggleClock = () => {
+    const supabase = createSupabaseClient();
+    supabaseRef.current = supabase;
+    supabase.auth.getUser().then(async ({ data, error }) => {
+      if (error || !data.user) {
+        router.replace("/login");
+        return;
+      }
+
+      const [{ data: employee }, { data: latestEvent }] = await Promise.all([
+        supabase.from("profiles").select("id, organization_id, full_name, employee_number").eq("id", data.user.id).single(),
+        supabase.from("attendance_events").select("event_type").eq("employee_id", data.user.id).order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      if (employee) setProfile(employee);
+      setClockedIn(latestEvent?.event_type === "clock_in" || latestEvent?.event_type === "break_end");
+    });
+  }, [router]);
+
+  const toggleClock = async () => {
+    const supabase = supabaseRef.current;
+    if (!supabase || !profile) {
+      setToast("Your employee profile is still loading.");
+      return;
+    }
     const next = !clockedIn;
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 }));
+      latitude = position.coords.latitude;
+      longitude = position.coords.longitude;
+    } catch {
+      // Attendance remains allowed and is flagged for HR review when location is unavailable.
+    }
+    const { error } = await supabase.from("attendance_events").insert({
+      organization_id: profile.organization_id,
+      employee_id: profile.id,
+      event_type: next ? "clock_in" : "clock_out",
+      latitude,
+      longitude,
+      outside_geofence: latitude === null,
+      notes: latitude === null ? "Location unavailable; review required" : null,
+    });
+    if (error) {
+      setToast(`Attendance was not saved: ${error.message}`);
+      return;
+    }
     setClockedIn(next);
-    setToast(`${next ? "Clock-in" : "Clock-out"} recorded. Location verified within Makati HQ.`);
+    setToast(`${next ? "Clock-in" : "Clock-out"} saved${latitude === null ? " and flagged for location review" : " with location"}.`);
     setTimeout(() => setToast(""), 4000);
   };
 
@@ -40,13 +89,13 @@ export default function Home() {
       <div className="brand"><b>P</b> PulseHR</div>
       <div className="company"><i>NB</i><span><strong>Northstar Build Co.</strong><small>Philippines</small></span><b>⌄</b></div>
       <nav>{nav.map((item, i) => <button key={item} onClick={() => setTab(item)} className={tab === item ? "active" : ""}><span>{["⌂", "◷", "◇", "₱", "♙", "▥"][i]}</span>{item}{item === "Leave" && <em>2</em>}</button>)}</nav>
-      <div className="aside-foot"><button>⚙ &nbsp; Settings</button><div className="person"><i>MC</i><span><strong>Mara Cruz</strong><small>Employee · ENG-0142</small></span></div></div>
+      <div className="aside-foot"><button>⚙ &nbsp; Settings</button><div className="person" onClick={async()=>{await supabaseRef.current?.auth.signOut();router.replace("/login")}}><i>{profile?.full_name.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase() || "HR"}</i><span><strong>{profile?.full_name || "Loading profile"}</strong><small>Employee · {profile?.employee_number || "—"} · Sign out</small></span></div></div>
     </aside>
     <main>
       <header><button className="search">⌕ &nbsp; Search people, reports... <kbd>⌘ K</kbd></button><div><span className={`database-status ${databaseStatus}`}><i />{databaseStatus === "checking" ? "Connecting" : databaseStatus === "connected" ? "Database connected" : "Database unavailable"}</span><button>♢</button><button>?</button></div></header>
       <div className="content">
         {tab !== "Overview" ? <section className="empty card"><small>MODULE</small><h1>{tab}</h1><p>This module is part of the MVP. The first working slice focuses on attendance, leave, and payroll visibility.</p><button className="primary" onClick={() => setTab("Overview")}>Back to overview</button></section> : <>
-          <section className="welcome"><div><small>THURSDAY, AUGUST 6</small><h1>Good morning, Mara.</h1><p>Here’s your workday at a glance.</p></div><button className="outline" onClick={() => setLeave(true)}>＋ Request leave</button></section>
+          <section className="welcome"><div><small>THURSDAY, AUGUST 6</small><h1>Good morning, {profile?.full_name.split(" ")[0] || "there"}.</h1><p>Here’s your workday at a glance.</p></div><button className="outline" onClick={() => setLeave(true)}>＋ Request leave</button></section>
           <section className="hero">
             <article className="clock">
               <div className="clock-label"><i className={clockedIn ? "dot" : "dot off"}/>{clockedIn ? "CLOCKED IN" : "NOT CLOCKED IN"}<span>Asia/Manila</span></div>
