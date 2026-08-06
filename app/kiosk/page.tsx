@@ -22,6 +22,7 @@ export default function KioskPage() {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<Result | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState("");
   const [activity, setActivity] = useState<Activity[]>([]);
   const [activitySearch, setActivitySearch] = useState("");
 
@@ -79,38 +80,60 @@ export default function KioskPage() {
   async function clock(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selfie) return setMessage("Capture a selfie before continuing.");
-    const form = new FormData(event.currentTarget);
+    if (busy) return;
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     setBusy(true);
+    setProgress("Checking location…");
     setMessage("");
     setResult(null);
-    let latitude: number | null = null,
-      longitude: number | null = null;
     try {
-      const location = await new Promise<GeolocationPosition>(
-        (resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 8000,
-          }),
+      let latitude: number | null = null,
+        longitude: number | null = null;
+      try {
+        const location = await new Promise<GeolocationPosition>(
+          (resolve, reject) =>
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 5000,
+              maximumAge: 30000,
+            }),
+        );
+        latitude = location.coords.latitude;
+        longitude = location.coords.longitude;
+      } catch {
+        /* Attendance remains allowed and is flagged for location review. */
+      }
+
+      setProgress("Saving attendance…");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const { data, error } = await supabase
+        .current!.rpc("kiosk_clock", {
+          p_kiosk_token: token,
+          p_employee_number: form.get("employee_number"),
+          p_pin: form.get("pin"),
+          p_selfie_data: selfie,
+          p_latitude: latitude,
+          p_longitude: longitude,
+        })
+        .abortSignal(controller.signal);
+      clearTimeout(timeout);
+      if (error) throw error;
+      setResult(data as Result);
+      setSelfie("");
+      formElement.reset();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      setMessage(
+        detail.toLowerCase().includes("abort")
+          ? "The request timed out. Check Today's attendance before trying again."
+          : detail || "Attendance could not be recorded. Please try again.",
       );
-      latitude = location.coords.latitude;
-      longitude = location.coords.longitude;
-    } catch {
-      /* allow and flag */
+    } finally {
+      setBusy(false);
+      setProgress("");
     }
-    const { data, error } = await supabase.current!.rpc("kiosk_clock", {
-      p_kiosk_token: token,
-      p_employee_number: form.get("employee_number"),
-      p_pin: form.get("pin"),
-      p_selfie_data: selfie,
-      p_latitude: latitude,
-      p_longitude: longitude,
-    });
-    setBusy(false);
-    if (error) return setMessage(error.message);
-    setResult(data as Result);
-    setSelfie("");
-    event.currentTarget.reset();
   }
 
   if (!token)
@@ -220,7 +243,7 @@ export default function KioskPage() {
             </label>
             {message && <div className="login-message">{message}</div>}
             <button className="primary clock-submit" disabled={busy}>
-              {busy ? "Recording…" : "Record attendance"}
+              {busy ? progress || "Recording…" : "Record attendance"}
             </button>
           </form>
         )}
