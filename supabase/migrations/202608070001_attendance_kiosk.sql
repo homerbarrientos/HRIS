@@ -62,7 +62,7 @@ create or replace function public.admin_create_employee(
   p_personal_enabled boolean default false,
   p_selfie_required boolean default true
 ) returns public.employees
-language plpgsql security definer set search_path = public
+language plpgsql security definer set search_path = public, extensions
 as $$
 declare result public.employees;
 begin
@@ -78,7 +78,7 @@ $$;
 
 create or replace function public.admin_create_kiosk(p_name text)
 returns text
-language plpgsql security definer set search_path = public
+language plpgsql security definer set search_path = public, extensions
 as $$
 declare raw_token text;
 begin
@@ -98,7 +98,7 @@ create or replace function public.kiosk_clock(
   p_latitude double precision default null,
   p_longitude double precision default null
 ) returns jsonb
-language plpgsql security definer set search_path = public
+language plpgsql security definer set search_path = public, extensions
 as $$
 declare device public.kiosk_devices;
 declare employee public.employees;
