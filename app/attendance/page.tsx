@@ -1,0 +1,24 @@
+"use client";
+/* eslint-disable @next/next/no-html-link-for-pages */
+
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createSupabaseClient } from "@/lib/supabase";
+
+type Employee = { id:string; employee_number:string; full_name:string; active:boolean; kiosk_enabled:boolean; selfie_required:boolean };
+type EventRow = { id:string; event_type:string; occurred_at:string; location_unavailable:boolean; employees:{ full_name:string; employee_number:string } | null };
+
+export default function AttendanceAdminPage() {
+  const router = useRouter(); const db = useRef<SupabaseClient|null>(null);
+  const [employees,setEmployees]=useState<Employee[]>([]); const [events,setEvents]=useState<EventRow[]>([]);
+  const [message,setMessage]=useState(""); const [kioskToken,setKioskToken]=useState("");
+  async function load(client=db.current!){
+    const [{data:e},{data:a}] = await Promise.all([client.from("employees").select("id,employee_number,full_name,active,kiosk_enabled,selfie_required").order("full_name"),client.from("kiosk_attendance_events").select("id,event_type,occurred_at,location_unavailable,employees(full_name,employee_number)").order("occurred_at",{ascending:false}).limit(100)]);
+    setEmployees((e||[]) as Employee[]); setEvents((a||[]) as unknown as EventRow[]);
+  }
+  useEffect(()=>{const client=createSupabaseClient();db.current=client;client.auth.getUser().then(({data})=>{if(!data.user)router.replace("/login");else load(client)})},[router]);
+  async function addEmployee(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);const {error}=await db.current!.rpc("admin_create_employee",{p_employee_number:form.get("employee_number"),p_full_name:form.get("full_name"),p_pin:form.get("pin"),p_kiosk_enabled:true,p_personal_enabled:false,p_selfie_required:true});if(error)return setMessage(error.message);event.currentTarget.reset();setMessage("Employee created.");load()}
+  async function createKiosk(event:FormEvent<HTMLFormElement>){event.preventDefault();const form=new FormData(event.currentTarget);const {data,error}=await db.current!.rpc("admin_create_kiosk",{p_name:form.get("name")});if(error)return setMessage(error.message);setKioskToken(String(data));event.currentTarget.reset()}
+  return <main className="admin-page"><header className="admin-top"><div className="brand login-brand"><b>P</b> PulseHR</div><div><a href="/">Dashboard</a><a href="/kiosk" target="_blank">Open kiosk</a></div></header><div className="admin-content"><div className="admin-title"><div><small>ATTENDANCE ADMINISTRATION</small><h1>Employees & kiosk attendance</h1><p>Manage employee kiosk access and monitor verified clock records.</p></div></div>{message&&<div className="login-message">{message}</div>}<section className="admin-grid"><article className="card admin-form"><h2>Add employee</h2><form onSubmit={addEmployee}><label>Employee name<input name="full_name" required /></label><label>Employee ID<input name="employee_number" required /></label><label>Initial PIN<input name="pin" type="password" inputMode="numeric" pattern="[0-9]{4,8}" required /></label><button className="primary">Create employee</button></form></article><article className="card admin-form"><h2>Activate kiosk</h2><form onSubmit={createKiosk}><label>Device name<input name="name" placeholder="Reception tablet" required /></label><button className="primary">Generate kiosk token</button></form>{kioskToken&&<div className="token-box"><b>Copy this token now</b><code>{kioskToken}</code><small>It is shown only once. Enter it at /kiosk on the shared device.</small></div>}</article></section><section className="card admin-table"><div className="section-head"><div><h3>Employees</h3><p>{employees.length} registered for attendance</p></div></div><div className="admin-tr head"><span>Name</span><span>Employee ID</span><span>Kiosk</span><span>Selfie</span></div>{employees.map(e=><div className="admin-tr" key={e.id}><span>{e.full_name}</span><span>{e.employee_number}</span><span>{e.kiosk_enabled?"Enabled":"Disabled"}</span><span>{e.selfie_required?"Required":"Optional"}</span></div>)}</section><section className="card admin-table"><div className="section-head"><div><h3>Latest attendance</h3><p>Most recent 100 kiosk records</p></div></div><div className="attendance-tr head"><span>Employee</span><span>Action</span><span>Date & time</span><span>Location</span></div>{events.map(e=><div className="attendance-tr" key={e.id}><span>{e.employees?.full_name||"Unknown"}<small>{e.employees?.employee_number}</small></span><span>{e.event_type==="clock_in"?"Clock in":"Clock out"}</span><span>{new Date(e.occurred_at).toLocaleString("en-PH")}</span><span>{e.location_unavailable?"Flagged":"Captured"}</span></div>)}</section></div></main>;
+}
