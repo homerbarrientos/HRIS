@@ -88,7 +88,7 @@ export default function Home() {
     <aside>
       <div className="brand"><b>P</b> PulseHR</div>
       <div className="company"><i>NB</i><span><strong>Northstar Build Co.</strong><small>Philippines</small></span><b>⌄</b></div>
-      <nav>{nav.map((item, i) => <button key={item} onClick={() => setTab(item)} className={tab === item ? "active" : ""}><span>{["⌂", "◷", "◇", "₱", "♙", "▥"][i]}</span>{item}{item === "Leave" && <em>2</em>}</button>)}</nav>
+      <nav>{nav.map((item, i) => <button key={item} onClick={() => item === "Time & attendance" ? router.push("/attendance") : setTab(item)} className={tab === item ? "active" : ""}><span>{["⌂", "◷", "◇", "₱", "♙", "▥"][i]}</span>{item}{item === "Leave" && <em>2</em>}</button>)}</nav>
       <div className="aside-foot"><button>⚙ &nbsp; Settings</button><div className="person" onClick={async()=>{await supabaseRef.current?.auth.signOut();router.replace("/login")}}><i>{profile?.full_name.split(" ").map(x=>x[0]).join("").slice(0,2).toUpperCase() || "HR"}</i><span><strong>{profile?.full_name || "Loading profile"}</strong><small>Employee · {profile?.employee_number || "—"} · Sign out</small></span></div></div>
     </aside>
     <main>
