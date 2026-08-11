@@ -140,7 +140,9 @@ export default function Home() {
               onClick={() =>
                 item === "Time & attendance"
                   ? router.push("/attendance")
-                  : item === "Reports"
+                  : item === "People"
+                    ? router.push("/employees")
+                    : item === "Reports"
                     ? router.push("/reports")
                     : setTab(item)
               }
