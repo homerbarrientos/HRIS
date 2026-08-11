@@ -13,6 +13,40 @@ type Result = {
 };
 type Activity = Result;
 
+function attendanceErrorMessage(error: unknown) {
+  let message = "Attendance could not be recorded. Please try again.";
+  if (error instanceof Error) message = error.message;
+  else if (error && typeof error === "object") {
+    const value = error as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+    const parts = [value.message, value.details, value.hint].filter(
+      (part): part is string => typeof part === "string" && part.length > 0,
+    );
+    if (parts.length) message = parts.join(" — ");
+    else if (value.code)
+      message = `Attendance error (${String(value.code)}). Please ask HR for assistance.`;
+  } else if (typeof error === "string" && error) message = error;
+
+  const normalized = message.toLowerCase();
+  if (normalized.includes("employee id or pin"))
+    return "Employee ID or PIN is incorrect. Please check and try again.";
+  if (normalized.includes("kiosk is not authorized"))
+    return "This kiosk is no longer authorized. Please ask HR to reactivate it.";
+  if (normalized.includes("please wait before"))
+    return "Attendance was just recorded. Please wait 30 seconds before the next action.";
+  if (normalized.includes("selfie is required"))
+    return "A selfie is required before recording attendance.";
+  if (normalized.includes("abort") || normalized.includes("timed out"))
+    return "The request timed out. Check Today's attendance before trying again.";
+  if (normalized.includes("failed to fetch") || normalized.includes("network"))
+    return "Network connection failed. Check the internet connection and try again.";
+  return message;
+}
+
 export default function KioskPage() {
   const supabase = useRef<SupabaseClient | null>(null);
   const video = useRef<HTMLVideoElement | null>(null);
@@ -124,12 +158,7 @@ export default function KioskPage() {
       setSelfie("");
       formElement.reset();
     } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      setMessage(
-        detail.toLowerCase().includes("abort")
-          ? "The request timed out. Check Today's attendance before trying again."
-          : detail || "Attendance could not be recorded. Please try again.",
-      );
+      setMessage(attendanceErrorMessage(error));
     } finally {
       setBusy(false);
       setProgress("");
