@@ -138,7 +138,9 @@ export default function Home() {
             <button
               key={item}
               onClick={() =>
-                item === "Time & attendance"
+                item === "Leave"
+                  ? router.push("/leave")
+                  : item === "Time & attendance"
                   ? router.push("/attendance")
                   : item === "People"
                     ? router.push("/employees")
