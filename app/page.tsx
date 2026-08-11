@@ -155,7 +155,7 @@ export default function Home() {
           ))}
         </nav>
         <div className="aside-foot">
-          <button>⚙ &nbsp; Settings</button>
+          <button onClick={() => router.push("/settings/master-lists")}>⚙ &nbsp; Settings</button>
           <div
             className="person"
             onClick={async () => {
