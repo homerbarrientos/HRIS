@@ -6,11 +6,13 @@ import { useRouter } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseClient } from "@/lib/supabase";
 
-type Category = "employment_type"|"employee_status"|"pay_frequency"|"rate_type"|"department"|"position"|"contract_term"|"leave_type";
+type Category = "employment_type"|"employee_status"|"pay_frequency"|"rate_type"|"department"|"position"|"contract_term"|"leave_type"|"job_level"|"approval_role";
 type Item = {id:string;category:Category;code:string;label:string;description:string|null;numeric_value:number|null;is_default:boolean;is_active:boolean;is_system:boolean;sort_order:number};
 const categories:{code:Category;label:string;help:string}[]=[
   {code:"employment_type",label:"Employment classifications",help:"Regular, probationary, fixed-term, and company classifications"},
   {code:"employee_status",label:"Employee statuses",help:"Active, inactive, retired, on-leave, and separated lifecycle states"},
+  {code:"job_level",label:"Job levels / ranks",help:"Employee ranks used to select dynamic approval workflows"},
+  {code:"approval_role",label:"Approval roles",help:"Roles available as ordered leave-approval steps"},
   {code:"pay_frequency",label:"Pay frequencies",help:"Payroll cycle assigned to each employee"},
   {code:"rate_type",label:"Rate bases",help:"Hourly, daily, weekly, or monthly compensation basis"},
   {code:"department",label:"Departments",help:"Organization departments and business units"},
